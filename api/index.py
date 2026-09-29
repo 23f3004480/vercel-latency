@@ -4,12 +4,13 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 
 app = FastAPI()
 
-
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,17 +20,7 @@ app.add_middleware(
 )
 
 
-@app.middleware("http")
-async def force_cors_header(request: Request, call_next):
-    response = await call_next(request)
-
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-
-    return response
-
-# Load telemetry data
+# Load data
 DATA_FILE = Path(__file__).resolve().parent.parent / "q-vercel-latency.json"
 
 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -51,7 +42,6 @@ def percentile_95(values):
         return float(values[0])
 
     position = 0.95 * (len(values) - 1)
-
     lower = math.floor(position)
     upper = math.ceil(position)
 
@@ -60,14 +50,25 @@ def percentile_95(values):
 
     fraction = position - lower
 
-    return (
-        values[lower]
-        + fraction * (values[upper] - values[lower])
+    return values[lower] + fraction * (
+        values[upper] - values[lower]
+    )
+
+
+@app.options("/api/latency")
+async def latency_options():
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
     )
 
 
 @app.post("/api/latency")
-def calculate_latency(request: LatencyRequest):
+async def calculate_latency(request: LatencyRequest):
 
     results = []
 
@@ -111,6 +112,9 @@ def calculate_latency(request: LatencyRequest):
             "breaches": breaches
         })
 
-    return {
-        "results": results
-    }
+    return JSONResponse(
+        content={"results": results},
+        headers={
+            "Access-Control-Allow-Origin": "*"
+        },
+    )
