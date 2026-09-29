@@ -55,7 +55,7 @@ def percentile_95(values):
     )
 
 
-@app.post("/latency")
+@app.post("/api/latency")
 def calculate_latency(request: LatencyRequest):
 
     results = []
