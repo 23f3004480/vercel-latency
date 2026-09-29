@@ -113,7 +113,7 @@ async def latency_endpoint(request: Request):
         )
 
     metrics = _compute_metrics(regions, float(threshold_ms))
-    return JSONResponse(content=metrics)
+    return JSONResponse(content={"regions": metrics})
 
 
 @app.options("/api/latency")
