@@ -2,12 +2,13 @@ import json
 import math
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 
 app = FastAPI()
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,6 +18,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def force_cors_header(request: Request, call_next):
+    response = await call_next(request)
+
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+
+    return response
 
 # Load telemetry data
 DATA_FILE = Path(__file__).resolve().parent.parent / "q-vercel-latency.json"
