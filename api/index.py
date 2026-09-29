@@ -9,17 +9,16 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# Enable CORS for POST requests from any origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
 
-# Load the telemetry JSON
+# Load telemetry data
 DATA_FILE = Path(__file__).resolve().parent.parent / "q-vercel-latency.json"
 
 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -32,9 +31,6 @@ class LatencyRequest(BaseModel):
 
 
 def percentile_95(values):
-    """
-    Calculate the 95th percentile using linear interpolation.
-    """
     if not values:
         return 0.0
 
@@ -59,14 +55,13 @@ def percentile_95(values):
     )
 
 
-@app.post("/api/latency")
+@app.post("/latency")
 def calculate_latency(request: LatencyRequest):
 
     results = []
 
     for region in request.regions:
 
-        # Keep only records belonging to this region
         records = [
             row for row in DATA
             if row["region"] == region
@@ -82,7 +77,6 @@ def calculate_latency(request: LatencyRequest):
             for row in records
         ]
 
-        # Number of records ABOVE the threshold
         breaches = sum(
             1
             for latency in latencies
