@@ -31,10 +31,22 @@ async def add_cors_headers(request: Request, call_next):
 # ---------------------------------------------------------------------------
 # Telemetry data (embedded from q-vercel-latency.json so the endpoint has no
 # external file-system / network dependency once deployed on Vercel).
+#
+# Loaded defensively: if the file is missing/misplaced, we don't want the
+# whole serverless function to crash on import (which is what was causing
+# the 500 FUNCTION_INVOCATION_FAILED / blank Vercel error page on every
+# single request, GET included). Instead we record the error and surface
+# it in the JSON response, so the failure is actually visible and
+# debuggable instead of an opaque crash page.
 # ---------------------------------------------------------------------------
 _DATA_PATH = os.path.join(os.path.dirname(__file__), "data.json")
-with open(_DATA_PATH, "r") as _f:
-    RECORDS: List[dict] = json.load(_f)
+_DATA_LOAD_ERROR = None
+RECORDS: List[dict] = []
+try:
+    with open(_DATA_PATH, "r") as _f:
+        RECORDS = json.load(_f)
+except Exception as exc:  # noqa: BLE001 - deliberately broad, see comment above
+    _DATA_LOAD_ERROR = f"{type(exc).__name__}: {exc} (looked for: {_DATA_PATH}, dir contents: {os.listdir(os.path.dirname(__file__))})"
 
 
 def _percentile(values: List[float], pct: float) -> float:
@@ -81,6 +93,9 @@ def _compute_metrics(regions: List[str], threshold_ms: float) -> dict:
 
 @app.post("/api/latency")
 async def latency_endpoint(request: Request):
+    if _DATA_LOAD_ERROR:
+        return JSONResponse(status_code=500, content={"error": _DATA_LOAD_ERROR})
+
     body = await request.json()
     regions = body.get("regions", [])
     threshold_ms = body.get("threshold_ms")
@@ -110,6 +125,8 @@ async def latency_options():
 @app.get("/api/latency")
 async def latency_info():
     # Handy for sanity-checking the deployment in a browser.
+    if _DATA_LOAD_ERROR:
+        return JSONResponse(status_code=500, content={"error": _DATA_LOAD_ERROR})
     return {
         "message": "POST {'regions': [...], 'threshold_ms': <number>} to this endpoint.",
         "available_regions": sorted({r["region"] for r in RECORDS}),
